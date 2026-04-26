@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LL(1) Parser — Compiler Design</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<!-- ══ HEADER ══════════════════════════════════════════════════════════════ -->
+<header>
+  <div class="header-inner">
+    <div class="logo-chip">LL(1)</div>
+    <div>
+      <h1>Grammar Analyzer <span class="amp">&amp;</span> Parser</h1>
+    </div>
+  </div>
+</header>
+
+<!-- ══ STEP INDICATOR ══════════════════════════════════════════════════════ -->
+<div class="steps-bar">
+  <div class="step active" id="step-dot-1">
+    <div class="step-num">1</div>
+    <div class="step-label">Input Grammar</div>
+  </div>
+  <div class="step-line"></div>
+  <div class="step" id="step-dot-2">
+    <div class="step-num">2</div>
+    <div class="step-label">Diagnose</div>
+  </div>
+  <div class="step-line"></div>
+  <div class="step" id="step-dot-3">
+    <div class="step-num">3</div>
+    <div class="step-label">Fix &amp; Verify</div>
+  </div>
+  <div class="step-line"></div>
+  <div class="step" id="step-dot-4">
+    <div class="step-num">4</div>
+    <div class="step-label">Explore</div>
+  </div>
+</div>
+
+<main>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PHASE 1 — GRAMMAR INPUT
+     ══════════════════════════════════════════════════════════════════════ -->
+<section class="phase active" id="phase1">
+  <div class="phase-header">
+    <span class="phase-tag">Step 1</span>
+    <h2>Enter Your Grammar</h2>
+    <p>Write one production rule per line. Non-terminals must start with an uppercase letter. Use <code>#</code> for epsilon (ε).</p>
+  </div>
+
+  <div class="input-layout">
+    <div class="grammar-box">
+      <div class="box-label">
+        Production Rules
+        <span class="hint-inline">e.g. &nbsp;<code>E -> T E'</code>&nbsp; or &nbsp;<code>E->TE'</code></span>
+      </div>
+      <textarea id="grammarInput" spellcheck="false"
+        placeholder="E->TE'&#10;E'->+TE'|#&#10;T->FT'&#10;T'->*FT'|#&#10;F->(E)|id"></textarea>
+
+      <div class="sym-bar">
+        <span>Insert:</span>
+        <button class="sym-btn" onclick="ins('ε')">ε</button>
+        <button class="sym-btn" onclick="ins('#')">#</button>
+        <button class="sym-btn" onclick="ins('->')">&rarr;</button>
+        <button class="sym-btn" onclick="ins('|')">|</button>
+        <button class="sym-btn" onclick="ins('&apos;')">'</button>
+      </div>
+    </div>
+
+    <div class="side-panel">
+      <div class="box-label">Start Symbol</div>
+      <input type="text" id="startSymbol" placeholder="e.g.  E" class="start-input"/>
+
+      <div class="box-label" style="margin-top:18px">Load Example</div>
+      <select id="exampleSelect" onchange="loadExample()" class="example-select">
+        <option value="">— choose —</option>
+        <optgroup label="✅ Valid LL(1)">
+          <option value="arithmetic">Arithmetic Expressions</option>
+          <option value="parens">Nested Parentheses</option>
+          <option value="ifelse">If-Else Statement</option>
+          <option value="decl">Variable Declaration</option>
+          <option value="relop">Relational Operators</option>
+        </optgroup>
+        <optgroup label="⚠️ Needs Fixing (demo)">
+          <option value="leftrecur">Left Recursion Example</option>
+          <option value="leftfactor">Left Factoring Example</option>
+          <option value="both">Both LR + LF Example</option>
+        </optgroup>
+      </select>
+
+      <div class="rules-card">
+        <div class="rules-title">Quick Rules</div>
+        <div class="rule-item"><span class="badge up">A–Z</span> Non-terminal</div>
+        <div class="rule-item"><span class="badge lo">a–z</span> Terminal</div>
+        <div class="rule-item"><span class="badge sp">#</span> Epsilon (ε)</div>
+        <div class="rule-item"><span class="badge sp">|</span> Alternatives</div>
+        <div class="rule-item"><span class="badge sp">-></span> Production</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-actions">
+    <button class="btn-primary" onclick="runDiagnose()">
+      Analyse Grammar <span class="btn-arrow">→</span>
+    </button>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PHASE 2 — DIAGNOSIS
+     ══════════════════════════════════════════════════════════════════════ -->
+<section class="phase hidden" id="phase2">
+  <div class="phase-header">
+    <span class="phase-tag">Step 2</span>
+    <h2>Diagnosis Report</h2>
+    <p>We've checked your grammar for three common LL(1) problems. See results below.</p>
+  </div>
+
+  <!-- Structural errors (undefined NTs etc.) -->
+  <div id="errorBox" class="hidden"></div>
+
+  <!-- Detection cards -->
+  <div class="diag-grid" id="diagGrid"></div>
+
+  <!-- All-clear message -->
+  <div id="allClearBox" class="hidden all-clear-box">
+    <div class="all-clear-icon">✅</div>
+    <div>
+      <strong>Grammar is clean!</strong>
+      <p>No left recursion, left factoring or ambiguity found. You can proceed directly to explore FIRST / FOLLOW sets and the parsing table.</p>
+    </div>
+  </div>
+
+  <div class="phase-actions" id="diagActions">
+    <button class="btn-ghost" onclick="goBack(1)">← Edit Grammar</button>
+    <button class="btn-primary" id="fixBtn" onclick="runFix()" style="display:none">
+      🔧 Auto-Fix Issues <span class="btn-arrow">→</span>
+    </button>
+    <button class="btn-primary" id="skipFixBtn" onclick="goToExplore()" style="display:none">
+      Explore Results <span class="btn-arrow">→</span>
+    </button>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PHASE 3 — FIX EXPLANATION
+     ══════════════════════════════════════════════════════════════════════ -->
+<section class="phase hidden" id="phase3">
+  <div class="phase-header">
+    <span class="phase-tag">Step 3</span>
+    <h2>Auto-Fix &amp; Explanation</h2>
+    <p>Here is exactly what was wrong, why it's a problem, and how it was fixed — step by step.</p>
+  </div>
+
+  <div id="fixContent"></div>
+
+  <div class="phase-actions">
+    <button class="btn-ghost" onclick="goBack(2)">← Back to Diagnosis</button>
+    <button class="btn-primary" onclick="goToExplore()">
+      Explore Fixed Grammar <span class="btn-arrow">→</span>
+    </button>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PHASE 4 — EXPLORE
+     ══════════════════════════════════════════════════════════════════════ -->
+<section class="phase hidden" id="phase4">
+  <div class="phase-header">
+    <span class="phase-tag">Step 4</span>
+    <h2>Explore the Grammar</h2>
+    <p>Click any card below to expand and view the results.</p>
+  </div>
+
+  <!-- Active grammar display -->
+  <div class="active-grammar-box" id="activeGrammarBox"></div>
+
+  <!-- Accordion cards -->
+  <div class="accordion" id="acc-first">
+    <button class="acc-head" onclick="toggleAcc('acc-first')">
+      <span>📘 FIRST Sets</span><span class="acc-chevron">▼</span>
+    </button>
+    <div class="acc-body hidden" id="firstResult">
+      <p class="placeholder-msg">Loading…</p>
+    </div>
+  </div>
+
+  <div class="accordion" id="acc-follow">
+    <button class="acc-head" onclick="toggleAcc('acc-follow')">
+      <span>📗 FOLLOW Sets</span><span class="acc-chevron">▼</span>
+    </button>
+    <div class="acc-body hidden" id="followResult">
+      <p class="placeholder-msg">Loading…</p>
+    </div>
+  </div>
+
+  <div class="accordion" id="acc-table">
+    <button class="acc-head" onclick="toggleAcc('acc-table')">
+      <span>📊 LL(1) Parsing Table</span><span class="acc-chevron">▼</span>
+    </button>
+    <div class="acc-body hidden" id="tableResult">
+      <p class="placeholder-msg">Loading…</p>
+    </div>
+    <div class="acc-body hidden" id="conflictResult"></div>
+  </div>
+
+  <div class="accordion" id="acc-parse">
+    <button class="acc-head" onclick="toggleAcc('acc-parse')">
+      <span>🔍 Parse a String</span><span class="acc-chevron">▼</span>
+    </button>
+    <div class="acc-body hidden" id="parseSection">
+      <div class="parse-input-row">
+        <input type="text" id="stringInput" placeholder="Enter a string, e.g.  id + id * id"/>
+        <button class="btn-primary small" onclick="parseString()">Parse →</button>
+      </div>
+      <div id="traceResult"></div>
+    </div>
+  </div>
+
+  <div class="accordion" id="acc-tree">
+    <button class="acc-head" onclick="toggleAcc('acc-tree')">
+      <span>🌳 Parse Tree</span><span class="acc-chevron">▼</span>
+    </button>
+    <div class="acc-body hidden" id="treeSection">
+      <p style="font-size:0.82rem;color:var(--text-dim);margin-bottom:12px">
+        Parse a valid string above first — the tree will appear here automatically.
+      </p>
+      <div id="treeResult">
+        <p class="placeholder-msg">No parse tree yet. Enter a string and click Parse →</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-actions">
+    <button class="btn-ghost" onclick="startOver()">↺ Start Over</button>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <p>LL(1) Grammar Analyzer · Team DataCrafters · Compiler Design · Graphic Era University, Dehradun</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
